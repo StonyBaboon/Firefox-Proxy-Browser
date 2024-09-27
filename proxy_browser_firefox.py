@@ -1,64 +1,103 @@
-import time
 from selenium import webdriver
+from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.options import Options
 from selenium.webdriver.common.proxy import Proxy, ProxyType
-from selenium.common.exceptions import WebDriverException
+import time
+import sys
 
-def start_browser_with_proxy(proxy_address, proxy_type, debug=False):
-    try:
-        if debug:
-            print("[DEBUG] Starting Firefox driver...")
-
-        options = Options()
-        options.headless = False  # Do not run in headless mode, so we can see the browser
-
-        proxy = Proxy()
-
-        if proxy_type == 1:  # SOCKS4
-            proxy.proxy_type = ProxyType.MANUAL
-            proxy.socksProxy = proxy_address
-            proxy.socksVersion = 4
-        elif proxy_type == 2:  # HTTP/HTTPS
-            proxy.proxy_type = ProxyType.MANUAL
-            proxy.httpProxy = proxy_address
-            proxy.sslProxy = proxy_address
-        elif proxy_type == 3:  # SOCKS5
-            proxy.proxy_type = ProxyType.MANUAL
-            proxy.socksProxy = proxy_address
-            proxy.socksVersion = 5
-
-        capabilities = webdriver.DesiredCapabilities.FIREFOX
-        proxy.add_to_capabilities(capabilities)
-
-        driver = webdriver.Firefox(options=options, desired_capabilities=capabilities)
-
-        if debug:
-            print("[DEBUG] Waiting 5 seconds before accessing myip.com...")
-        time.sleep(5)
-
-        if debug:
-            print("[DEBUG] Accessing myip.com to verify the proxy...")
-        driver.get("https://www.myip.com/")
-
-        time.sleep(10)  # Wait to see the result
-
-    except WebDriverException as e:
-        print(f"An error occurred: {e}")
-    finally:
-        if 'driver' in locals():
-            if debug:
-                print("[DEBUG] Closing Firefox driver...")
-            driver.quit()
-
-if __name__ == "__main__":
+# Function to get the proxy from the user
+def get_proxy():
     proxy_address = input("Please enter the proxy address (e.g., proxy_ip:proxy_port): ")
+    return proxy_address
 
+# Function to get the proxy type from the user
+def get_proxy_type():
     print("Choose the proxy type:")
     print("1. SOCKS4")
-    print("2. HTTP/HTTPS")
-    print("3. SOCKS5")
-    proxy_type = int(input("Enter 1, 2, or 3: "))
+    print("2. SOCKS5")
+    print("3. HTTP")
+    print("4. HTTPS")
+    choice = input("Enter 1, 2, 3, or 4: ")
+    
+    if choice == '1':
+        return 'socks4'
+    elif choice == '2':
+        return 'socks5'
+    elif choice == '3':
+        return 'http'
+    elif choice == '4':
+        return 'https'
+    else:
+        print("Invalid option. Using HTTP as the default.")
+        return 'http'
 
-    debug_mode = input("Enable debug mode? (y/n): ").strip().lower() == 'y'
+# Debug function
+def debug_print(message):
+    if debug_mode:
+        print(f"[DEBUG] {message}")
 
-    start_browser_with_proxy(proxy_address, proxy_type, debug=debug_mode)
+# Initialize debug mode variable
+debug_mode = len(sys.argv) > 1 and sys.argv[1] == 'debug'
+
+# Get the proxy address and proxy type
+proxy_address = get_proxy()
+proxy_type = get_proxy_type()
+
+# Set Firefox options
+firefox_options = Options()
+firefox_options.headless = False  # If you want the Firefox window to be visible
+
+# Configure the proxy according to the user's choice
+if proxy_type == 'socks4':
+    proxy = Proxy({
+        'proxyType': ProxyType.MANUAL,
+        'socksProxy': proxy_address,
+        'socksVersion': 4,  # Setting SOCKS4 version
+        'sslProxy': proxy_address  # Proxy for SSL traffic
+    })
+elif proxy_type == 'socks5':
+    proxy = Proxy({
+        'proxyType': ProxyType.MANUAL,
+        'socksProxy': proxy_address,
+        'socksVersion': 5,  # Setting SOCKS5 version
+        'sslProxy': proxy_address
+    })
+elif proxy_type == 'https':
+    proxy = Proxy({
+        'proxyType': ProxyType.MANUAL,
+        'httpProxy': proxy_address,
+        'sslProxy': proxy_address  # HTTPS uses the HTTP proxy for SSL traffic
+    })
+else:  # HTTP as default
+    proxy = Proxy({
+        'proxyType': ProxyType.MANUAL,
+        'httpProxy': proxy_address,
+        'sslProxy': proxy_address  # For HTTPS as well
+    })
+
+# Apply proxy settings to Firefox
+firefox_options.proxy = proxy
+
+# Initialize the geckodriver service
+service = Service('C:/geckodriver/geckodriver.exe')  # Make sure the path is correct
+
+try:
+    debug_print("Starting the Firefox driver...")
+    driver = webdriver.Firefox(service=service, options=firefox_options)
+
+    debug_print("Waiting 5 seconds before accessing the website...")
+    time.sleep(5)  # Wait before accessing the website
+
+    debug_print("Accessing myip.com to check the proxy...")
+    driver.get('https://www.myip.com')  # Test the proxy by accessing this site
+
+    debug_print("The browser will remain open. Close it manually to finish.")
+    input("Press Enter to close the browser...")  # Wait for the user to press Enter to close
+
+except Exception as e:
+    print(f"An error occurred: {e}")
+finally:
+    # Make sure to close the browser
+    if 'driver' in locals():
+        debug_print("Closing the Firefox driver...")
+        driver.quit()
